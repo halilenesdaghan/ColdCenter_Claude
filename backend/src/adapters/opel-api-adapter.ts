@@ -5,7 +5,9 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { retryWithBackoff, sleep } from '../utils/helpers';
+import { sleep } from '../utils/helpers';
+import { retryWithBackoff, shouldRetryNetworkError } from '../utils/retry';
+import { circuitBreakerRegistry } from '../utils/circuit-breaker';
 import {
   VehicleModel,
   StockAvailability,
@@ -22,6 +24,12 @@ export class OpelAPIAdapter {
   private client: AxiosInstance;
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
+  private circuitBreaker = circuitBreakerRegistry.getOrCreate('opel-api', {
+    failureThreshold: 5,
+    successThreshold: 2,
+    timeout: 60000,
+    monitoringPeriod: 120000,
+  });
 
   constructor() {
     this.client = axios.create({
@@ -109,9 +117,27 @@ export class OpelAPIAdapter {
     try {
       logger.debug('Fetching vehicle pricing', { model, trim });
 
-      const response = await retryWithBackoff(async () => {
-        return await this.client.get(`/vehicles/${model}/pricing`);
-      });
+      const response = await this.circuitBreaker.execute(
+        async () => {
+          return await retryWithBackoff(
+            async () => await this.client.get(`/vehicles/${model}/pricing`),
+            {
+              maxAttempts: 3,
+              retryIf: shouldRetryNetworkError,
+            },
+          );
+        },
+        async () => {
+          // Fallback: return cached data or default
+          logger.warn('Using fallback for vehicle pricing');
+          throw new AppError(
+            ErrorCode.OPEL_API_ERROR,
+            'Service temporarily unavailable',
+            undefined,
+            503,
+          );
+        },
+      );
 
       const vehicleData: VehicleModel = response.data;
 
