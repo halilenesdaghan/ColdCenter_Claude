@@ -14,6 +14,13 @@ import { logger } from './utils/logger';
 import { CallManager } from './core/call-manager';
 import { opelAPIAdapter } from './adapters/opel-api-adapter';
 import { CallDirection, CallStatus, ApiResponse, AppError, ErrorCode } from './types';
+import { errorHandler, notFoundHandler, asyncHandler } from './middleware/error-handler';
+import { queueManager } from './services/workflow/queue-manager';
+import { scheduler } from './services/workflow/scheduler';
+import { registerProcessors } from './services/workflow/job-processors';
+import { circuitBreakerRegistry } from './utils/circuit-breaker';
+import { elevenLabsClient } from './services/speech/elevenlabs-client';
+import { s3Service } from './services/storage/s3-client';
 
 // Validate configuration
 try {
@@ -21,6 +28,20 @@ try {
   logger.info('Configuration validated successfully');
 } catch (error: any) {
   logger.error('Configuration validation failed:', error.message);
+  process.exit(1);
+}
+
+// Initialize workflow engine
+try {
+  // Register job processors
+  registerProcessors();
+  logger.info('Job processors registered');
+
+  // Start scheduler
+  scheduler.start();
+  logger.info('Scheduler started');
+} catch (error: any) {
+  logger.error('Failed to initialize workflow engine:', error.message);
   process.exit(1);
 }
 
@@ -68,19 +89,45 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 /**
  * Health check
  */
-app.get('/health', async (req: Request, res: Response) => {
-  const opelApiHealth = await opelAPIAdapter.healthCheck();
+app.get('/health', asyncHandler(async (req: Request, res: Response) => {
+  const [opelApiHealth, elevenLabsHealth] = await Promise.all([
+    opelAPIAdapter.healthCheck(),
+    elevenLabsClient.healthCheck(),
+  ]);
+
+  // Get queue stats
+  const queueStats = await queueManager.getAllQueuesStats();
+
+  // Get circuit breaker states
+  const circuitBreakers = circuitBreakerRegistry.getAll();
+  const cbStates: Record<string, any> = {};
+  circuitBreakers.forEach((name) => {
+    const cb = circuitBreakerRegistry.get(name);
+    if (cb) {
+      cbStates[name] = {
+        state: cb.getState(),
+        stats: cb.getStats(),
+      };
+    }
+  });
 
   res.json({
     status: 'ok',
     service: 'coldcenter-backend',
     version: '1.0.0',
     timestamp: Date.now(),
+    uptime: process.uptime(),
     dependencies: {
       opel_api: opelApiHealth ? 'ok' : 'down',
+      elevenlabs: elevenLabsHealth ? 'ok' : 'down',
+    },
+    queues: queueStats,
+    circuit_breakers: cbStates,
+    scheduler: {
+      running_jobs: scheduler.getRunningJobs(),
     },
   });
-});
+}));
 
 /**
  * Start new call
@@ -362,31 +409,10 @@ io.on('connection', (socket) => {
 // ============================================
 
 // 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: 'Endpoint not found',
-    },
-  });
-});
+app.use(notFoundHandler);
 
 // Global error handler
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  logger.error('Unhandled error', err);
-
-  const statusCode = err.statusCode || 500;
-  const code = err.code || 'INTERNAL_SERVER_ERROR';
-
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      code,
-      message: err.message || 'An unexpected error occurred',
-    },
-  });
-});
+app.use(errorHandler);
 
 // ============================================
 // Start server
@@ -406,25 +432,37 @@ httpServer.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully...');
+async function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received, shutting down gracefully...`);
 
-  httpServer.close(() => {
-    logger.info('HTTP server closed');
+  try {
+    // Stop accepting new connections
+    httpServer.close(() => {
+      logger.info('HTTP server closed');
+    });
+
+    // Stop scheduler
+    scheduler.stop();
+    logger.info('Scheduler stopped');
+
+    // Close all queues
+    await queueManager.closeAll();
+    logger.info('All queues closed');
+
+    // Reset circuit breakers
+    circuitBreakerRegistry.resetAll();
+    logger.info('Circuit breakers reset');
+
+    logger.info('Graceful shutdown completed');
     process.exit(0);
-  });
-
-  // Force shutdown after 30 seconds
-  setTimeout(() => {
-    logger.error('Forced shutdown after timeout');
+  } catch (error: any) {
+    logger.error('Error during graceful shutdown', error);
     process.exit(1);
-  }, 30000);
-});
+  }
+}
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully...');
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

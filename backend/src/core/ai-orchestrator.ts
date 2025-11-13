@@ -26,7 +26,7 @@ export interface AIResponse {
   confidence: number;
 }
 
-export interface AIOrchest ratorEvents {
+export interface AIOrchestratorEvents {
   'response.generated': (response: AIResponse) => void;
   'intent.detected': (intent: IntentClassification) => void;
   'state.changed': (newState: CallState) => void;

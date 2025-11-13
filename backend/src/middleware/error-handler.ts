@@ -28,7 +28,7 @@ interface ErrorResponse {
 /**
  * Global error handler middleware
  */
-export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
+export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction): void => {
   // Log error
   logger.error('Request error', {
     error: err.message,
