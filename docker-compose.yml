@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # DynamoDB Local for development
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: coldcenter-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+    volumes:
+      - dynamodb-data:/data
+    networks:
+      - coldcenter-network
+
+  # Redis for Bull Queue
+  redis:
+    image: redis:7-alpine
+    container_name: coldcenter-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - coldcenter-network
+    command: redis-server --appendonly yes
+
+  # Mock Opel API
+  mock-api:
+    build:
+      context: ./backend/mock-api
+      dockerfile: Dockerfile
+    container_name: coldcenter-mock-api
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - coldcenter-network
+    restart: unless-stopped
+
+  # Backend service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: coldcenter-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPEL_API_URL=http://mock-api:3001
+      - USE_MOCK_OPEL_API=true
+    env_file:
+      - .env.local
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - dynamodb-local
+      - redis
+      - mock-api
+    networks:
+      - coldcenter-network
+    restart: unless-stopped
+    command: npm run dev
+
+volumes:
+  dynamodb-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  coldcenter-network:
+    driver: bridge
