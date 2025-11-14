@@ -3,9 +3,8 @@
  */
 
 import OpenAI from 'openai';
-import { WebSocket } from 'ws';
 import { config } from '../config';
-import { logger, createLogger } from '../utils/logger';
+import { createLogger } from '../utils/logger';
 import {
   CallSession,
   CallState,
@@ -41,7 +40,6 @@ export interface AIOrchestratorEvents {
  */
 export class AIOrchestrator extends EventEmitter {
   private openai: OpenAI;
-  private ws: WebSocket | null = null;
   private callSession: CallSession;
   private conversationHistory: ConversationTurn[] = [];
   private systemPrompt: string;
@@ -115,7 +113,7 @@ Müşteri adı: ${this.callSession.customer_name || 'Bilinmiyor'}`;
   /**
    * Process user input and generate AI response
    */
-  async processUserInput(text: string, audioBuffer?: Buffer): Promise<AIResponse> {
+  async processUserInput(text: string, _audioBuffer?: Buffer): Promise<AIResponse> {
     try {
       this.logger.debug('Processing user input', { text });
 
@@ -441,10 +439,6 @@ Müşteri adı: ${this.callSession.customer_name || 'Bilinmiyor'}`;
    * Disconnect from AI service
    */
   disconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
     this.emit('connection.closed');
     this.logger.info('Disconnected from AI service');
   }

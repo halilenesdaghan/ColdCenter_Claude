@@ -10,11 +10,9 @@ import {
   CallDirection,
   Intent,
   IntentClassification,
-  AppError,
-  ErrorCode,
 } from '../types';
 import { AIOrchestrator, AIResponse } from './ai-orchestrator';
-import { logger, createLogger } from '../utils/logger';
+import { createLogger } from '../utils/logger';
 import { dynamoDBService, Tables } from '../services/database/dynamodb-client';
 import { generateCallId, isBusinessHours } from '../utils/helpers';
 
@@ -166,7 +164,9 @@ export class CallManager extends EventEmitter {
       case CallState.SLOT_FILL:
         if (response.slots && this.areRequiredSlotsFilled(response.slots)) {
           await this.transitionTo(CallState.EXECUTING);
-          await this.executeIntent(response.intent!, response.slots);
+          if (response.intent) {
+            await this.executeIntent(response.intent.intent, response.slots);
+          }
         }
         break;
 

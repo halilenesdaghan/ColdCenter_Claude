@@ -14,7 +14,6 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
-import { sha256 } from '../../utils/helpers';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Readable } from 'stream';
@@ -66,10 +65,17 @@ export class S3Service {
         return await this.uploadFileLocal(key, body);
       }
 
+      let bodyData: Buffer | string;
+      if (body instanceof Buffer || typeof body === 'string') {
+        bodyData = body;
+      } else {
+        bodyData = await this.streamToBuffer(body as Readable);
+      }
+
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
-        Body: body instanceof Buffer || typeof body === 'string' ? body : await this.streamToBuffer(body),
+        Body: bodyData,
         ContentType: options?.contentType || 'application/octet-stream',
         Metadata: options?.metadata,
         ServerSideEncryption: options?.encryption !== false ? 'AES256' : undefined,
@@ -305,7 +311,7 @@ export class S3Service {
     } else if (typeof body === 'string') {
       buffer = Buffer.from(body);
     } else {
-      buffer = await this.streamToBuffer(body);
+      buffer = await this.streamToBuffer(body as Readable);
     }
 
     await fs.writeFile(filePath, buffer);

@@ -126,7 +126,7 @@ export class QueueManager {
       logger.debug('Job active', { queue: name, jobId: job.id });
     });
 
-    queue.on('completed', (job, result) => {
+    queue.on('completed', (job) => {
       logger.info('Job completed', {
         queue: name,
         jobId: job.id,
@@ -292,7 +292,7 @@ export class QueueManager {
   async getAllQueuesStats(): Promise<Record<string, any>> {
     const stats: Record<string, any> = {};
 
-    for (const [name, queue] of this.queues) {
+    for (const [name] of this.queues) {
       stats[name] = await this.getQueueStats(name);
     }
 

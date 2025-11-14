@@ -72,7 +72,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   logger.info('Incoming request', {
     method: req.method,
     path: req.path,
@@ -151,7 +151,7 @@ app.post('/api/calls/start', async (req: Request, res: Response) => {
 
     const session = callManager.getSession();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: {
         call_id: session.call_id,
@@ -162,7 +162,7 @@ app.post('/api/calls/start', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     logger.error('Failed to start call', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_SERVER_ERROR',

@@ -62,7 +62,7 @@ export async function processAppointmentConfirmation(job: Job<AppointmentConfirm
  * Process appointment reminder job
  */
 export async function processAppointmentReminder(job: Job<AppointmentReminderJob>): Promise<void> {
-  const { appointment_id, customer_phone, customer_name, appointment_date, appointment_time } = job.data;
+  const { appointment_id, customer_phone, appointment_date, appointment_time } = job.data;
 
   logger.info('Processing appointment reminder', {
     jobId: job.id,
@@ -111,7 +111,7 @@ export async function processAppointmentReminder(job: Job<AppointmentReminderJob
  * Process callback job
  */
 export async function processCallback(job: Job<CallbackJob>): Promise<void> {
-  const { call_id, customer_phone, customer_name, reason, priority } = job.data;
+  const { call_id, customer_phone, reason, priority } = job.data;
 
   logger.info('Processing callback', {
     jobId: job.id,
@@ -148,7 +148,7 @@ export async function processCallback(job: Job<CallbackJob>): Promise<void> {
  * Process daily summary job
  */
 export async function processDailySummary(job: Job<DailySummaryJob>): Promise<void> {
-  const { date, recipient_emails } = job.data;
+  const { date } = job.data;
 
   logger.info('Processing daily summary', {
     jobId: job.id,
