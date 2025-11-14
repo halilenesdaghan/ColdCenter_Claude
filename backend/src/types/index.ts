@@ -44,11 +44,20 @@ export interface CallSession {
   state: CallState;
   intent?: Intent;
   slots?: Record<string, any>;
+  conversation_history?: Array<{
+    role: string;
+    content: string;
+    timestamp: number;
+  }>;
   escalated: boolean;
   transfer_reason?: string;
+  escalation_reason?: string;
+  human_takeover?: boolean;
   agent_id?: string;
   duration_seconds?: number;
+  duration?: number;
   created_at: number;
+  updated_at?: number;
   ended_at?: number;
   recording_url?: string;
   transcript_url?: string;

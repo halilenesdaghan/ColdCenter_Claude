@@ -13,14 +13,13 @@ import { config, validateConfig, isDevelopment } from './config';
 import { logger } from './utils/logger';
 import { CallManager } from './core/call-manager';
 import { opelAPIAdapter } from './adapters/opel-api-adapter';
-import { CallDirection, CallStatus, ApiResponse, AppError, ErrorCode } from './types';
+import { CallDirection } from './types';
 import { errorHandler, notFoundHandler, asyncHandler } from './middleware/error-handler';
 import { queueManager } from './services/workflow/queue-manager';
 import { scheduler } from './services/workflow/scheduler';
 import { registerProcessors } from './services/workflow/job-processors';
 import { circuitBreakerRegistry } from './utils/circuit-breaker';
 import { elevenLabsClient } from './services/speech/elevenlabs-client';
-import { s3Service } from './services/storage/s3-client';
 
 // Validate configuration
 try {
@@ -89,7 +88,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 /**
  * Health check
  */
-app.get('/health', asyncHandler(async (req: Request, res: Response) => {
+app.get('/health', asyncHandler(async (_req: Request, res: Response) => {
   const [opelApiHealth, elevenLabsHealth] = await Promise.all([
     opelAPIAdapter.healthCheck(),
     elevenLabsClient.healthCheck(),
@@ -111,7 +110,7 @@ app.get('/health', asyncHandler(async (req: Request, res: Response) => {
     }
   });
 
-  res.json({
+  return res.json({
     status: 'ok',
     service: 'coldcenter-backend',
     version: '1.0.0',
@@ -195,13 +194,13 @@ app.get('/api/calls/:call_id', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: session,
     });
   } catch (error: any) {
     logger.error('Failed to get call', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_SERVER_ERROR',
@@ -222,13 +221,13 @@ app.get('/api/vehicles/:model/pricing', async (req: Request, res: Response) => {
 
     const pricing = await opelAPIAdapter.getVehiclePricing(model, trim as string);
 
-    res.json({
+    return res.json({
       success: true,
       data: pricing,
     });
   } catch (error: any) {
     logger.error('Failed to get vehicle pricing', error);
-    res.status(error.statusCode || 500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',
@@ -262,13 +261,13 @@ app.get('/api/inventory/availability', async (req: Request, res: Response) => {
       dealer as string,
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: availability,
     });
   } catch (error: any) {
     logger.error('Failed to check stock', error);
-    res.status(error.statusCode || 500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',

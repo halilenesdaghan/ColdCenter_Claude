@@ -5,7 +5,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { sleep } from '../utils/helpers';
 import { retryWithBackoff, shouldRetryNetworkError } from '../utils/retry';
 import { circuitBreakerRegistry } from '../utils/circuit-breaker';
 import {
@@ -42,15 +41,15 @@ export class OpelAPIAdapter {
 
     // Add request interceptor for authentication
     this.client.interceptors.request.use(
-      async (config) => {
+      async (reqConfig) => {
         // Ensure we have a valid token
         if (!config.opel_api?.use_mock) {
           await this.ensureAuthenticated();
           if (this.accessToken) {
-            config.headers.Authorization = `Bearer ${this.accessToken}`;
+            reqConfig.headers.Authorization = `Bearer ${this.accessToken}`;
           }
         }
-        return config;
+        return reqConfig;
       },
       (error) => Promise.reject(error),
     );

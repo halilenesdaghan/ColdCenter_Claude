@@ -2,7 +2,7 @@
  * Test Helpers - Common utilities for tests
  */
 
-import { CallSession, CallStatus, CallState, CallDirection, Intent } from '../../types';
+import { CallSession, CallStatus, CallState, CallDirection } from '../../types';
 
 /**
  * Create mock call session
@@ -259,13 +259,13 @@ export async function assertThrows(
  * Mock timer helpers
  */
 export class MockTimer {
-  private originalSetTimeout: typeof setTimeout;
-  private originalSetInterval: typeof setInterval;
-  private timers: Map<NodeJS.Timeout, { callback: Function; delay: number }> = new Map();
+  private _originalSetTimeout: typeof setTimeout;
+  private _originalSetInterval: typeof setInterval;
+  private _timers: Map<NodeJS.Timeout, { callback: Function; delay: number }> = new Map();
 
   constructor() {
-    this.originalSetTimeout = global.setTimeout;
-    this.originalSetInterval = global.setInterval;
+    this._originalSetTimeout = global.setTimeout;
+    this._originalSetInterval = global.setInterval;
   }
 
   install(): void {
@@ -295,7 +295,7 @@ export class MockTimer {
 export function createSpy<T extends (...args: any[]) => any>(
   implementation?: T,
 ): jest.MockedFunction<T> {
-  return jest.fn(implementation) as jest.MockedFunction<T>;
+  return jest.fn(implementation) as unknown as jest.MockedFunction<T>;
 }
 
 /**

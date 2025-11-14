@@ -20,8 +20,8 @@ describe('API Integration Tests', () => {
     app.use(express.json());
 
     // Health check endpoint
-    app.get('/health', (req, res) => {
-      res.status(200).json({
+    app.get('/health', (_req, res) => {
+      return res.status(200).json({
         status: 'ok',
         timestamp: Date.now(),
         uptime: process.uptime(),
@@ -38,7 +38,7 @@ describe('API Integration Tests', () => {
         });
       }
 
-      res.status(201).json({
+      return res.status(201).json({
         call_id: 'call-test-123',
         customer_phone,
         direction: direction || 'inbound',
@@ -57,7 +57,7 @@ describe('API Integration Tests', () => {
         });
       }
 
-      res.status(201).json({
+      return res.status(201).json({
         appointment_id: 'apt-test-123',
         customer_phone,
         appointment_date,
