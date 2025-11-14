@@ -160,6 +160,7 @@ export enum TaskType {
   APPOINTMENT_REMINDER = 'appointment_reminder',
   CALLBACK = 'callback',
   SURVEY = 'survey',
+  DAILY_SUMMARY = 'daily_summary',
 }
 
 export enum TaskStatus {

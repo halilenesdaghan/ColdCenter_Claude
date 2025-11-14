@@ -23,6 +23,7 @@ export interface CircuitBreakerStats {
   state: CircuitState;
   failures: number;
   successes: number;
+  rejections: number;
   totalRequests: number;
   lastFailureTime?: number;
   lastSuccessTime?: number;
@@ -35,6 +36,7 @@ export class CircuitBreaker extends EventEmitter {
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount: number = 0;
   private successCount: number = 0;
+  private rejectionCount: number = 0;
   private totalRequests: number = 0;
   private lastFailureTime?: number;
   private lastSuccessTime?: number;
@@ -66,6 +68,9 @@ export class CircuitBreaker extends EventEmitter {
           name: this.name,
           nextAttempt: new Date(this.nextAttempt).toISOString(),
         });
+
+        this.rejectionCount++;
+        this.emit('reject');
 
         if (fallback) {
           logger.info('Using fallback function', { name: this.name });
@@ -175,11 +180,22 @@ export class CircuitBreaker extends EventEmitter {
   /**
    * Get current stats
    */
+  /**
+   * Get current state
+   */
+  getState(): CircuitState {
+    return this.state;
+  }
+
+  /**
+   * Get statistics
+   */
   getStats(): CircuitBreakerStats {
     return {
       state: this.state,
       failures: this.failureCount,
       successes: this.successCount,
+      rejections: this.rejectionCount,
       totalRequests: this.totalRequests,
       lastFailureTime: this.lastFailureTime,
       lastSuccessTime: this.lastSuccessTime,
@@ -193,6 +209,7 @@ export class CircuitBreaker extends EventEmitter {
     this.state = CircuitState.CLOSED;
     this.failureCount = 0;
     this.successCount = 0;
+    this.rejectionCount = 0;
     this.lastFailureTime = undefined;
     this.lastSuccessTime = undefined;
     this.nextAttempt = undefined;
@@ -251,6 +268,13 @@ export class CircuitBreakerRegistry {
    */
   get(name: string): CircuitBreaker | undefined {
     return this.breakers.get(name);
+  }
+
+  /**
+   * Get all breaker names
+   */
+  getAll(): string[] {
+    return Array.from(this.breakers.keys());
   }
 
   /**

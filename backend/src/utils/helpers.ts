@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import { format, parse, addMinutes, isWithinInterval, parseISO } from 'date-fns';
-import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { format, parseISO } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import crypto from 'crypto';
 import { config } from '../config';
 
@@ -111,24 +111,29 @@ export const normalizePhoneNumber = (phone: string): string => {
 };
 
 /**
- * Check if current time is within business hours
+ * Check if given date/time is within business hours
  */
-export const isBusinessHours = (timezone: string = config.business_hours.timezone): boolean => {
+export const isBusinessHours = (date?: Date | string, timezone: string = 'Europe/Istanbul'): boolean => {
   try {
-    const now = new Date();
-    const zonedNow = utcToZonedTime(now, timezone);
-    const dayOfWeek = zonedNow.getDay();
+    const checkDate = date ? (typeof date === 'string' ? new Date(date) : date) : new Date();
+    const zonedDate = toZonedTime(checkDate, timezone);
+    const dayOfWeek = zonedDate.getDay();
 
-    // Check if today is a business day
-    if (!config.business_hours.days.includes(dayOfWeek)) {
+    // Monday = 1, Friday = 5
+    const businessDays = [1, 2, 3, 4, 5]; // Monday to Friday
+    if (!businessDays.includes(dayOfWeek)) {
       return false;
     }
 
-    const currentTime = format(zonedNow, 'HH:mm');
-    const startTime = config.business_hours.start;
-    const endTime = config.business_hours.end;
+    const hours = zonedDate.getHours();
+    const minutes = zonedDate.getMinutes();
+    const currentMinutes = hours * 60 + minutes;
 
-    return currentTime >= startTime && currentTime < endTime;
+    // Business hours: 9:00 - 18:00
+    const startMinutes = 9 * 60; // 9:00
+    const endMinutes = 18 * 60; // 18:00
+
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
   } catch (error) {
     return false;
   }
@@ -281,4 +286,192 @@ export const toISODate = (date: Date): string => {
  */
 export const toISOTime = (date: Date): string => {
   return format(date, 'HH:mm');
+};
+
+/**
+ * Format phone number (alias for normalizePhoneNumber)
+ */
+export const formatPhoneNumber = normalizePhoneNumber;
+
+/**
+ * Validate phone number (alias for isValidTurkishPhone)
+ */
+export const validatePhoneNumber = isValidTurkishPhone;
+
+/**
+ * Generate customer ID from phone number
+ */
+export const generateCustomerId = (phone: string): string => {
+  const normalized = normalizePhoneNumber(phone);
+  return `cust-${sha256(normalized)}`;
+};
+
+/**
+ * Sanitize user input
+ */
+export const sanitizeUserInput = (input: string, maxLength?: number): string => {
+  if (!input) return '';
+
+  // Remove HTML tags
+  let sanitized = input.replace(/<[^>]*>/g, '');
+
+  // Trim whitespace
+  sanitized = sanitized.trim();
+
+  // Limit length if specified
+  if (maxLength && sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength);
+  }
+
+  return sanitized;
+};
+
+/**
+ * Extract slot value from text
+ */
+export const extractSlotValue = (text: string, slotName: string, slots: Record<string, any>): void => {
+  // Simple slot extraction - can be enhanced with NLP
+  const lowerText = text.toLowerCase();
+
+  if (slotName === 'vehicle_model') {
+    const models = ['corsa', 'astra', 'grandland', 'mokka', 'combo', 'vivaro'];
+    for (const model of models) {
+      if (lowerText.includes(model)) {
+        slots[slotName] = model.charAt(0).toUpperCase() + model.slice(1);
+        return;
+      }
+    }
+  }
+
+  if (slotName === 'date') {
+    // Extract date patterns
+    const datePatterns = [
+      /(\d{1,2})\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)/i,
+      /yarın/i,
+      /bugün/i,
+    ];
+
+    for (const pattern of datePatterns) {
+      const match = lowerText.match(pattern);
+      if (match) {
+        slots[slotName] = match[0];
+        return;
+      }
+    }
+  }
+
+  if (slotName === 'time') {
+    // Extract time patterns
+    const timePattern = /(\d{1,2}):(\d{2})|(\d{1,2})\s*saat/i;
+    const match = lowerText.match(timePattern);
+    if (match) {
+      slots[slotName] = match[0];
+    }
+  }
+};
+
+/**
+ * Calculate call duration in seconds
+ */
+export const calculateCallDuration = (startTime: number, endTime: number): number => {
+  const duration = Math.floor((endTime - startTime) / 1000);
+  return duration > 0 ? duration : 0;
+};
+
+/**
+ * Format currency
+ */
+export const formatCurrency = (amount: number, currency: string = 'TRY'): string => {
+  const rounded = Math.round(amount);
+  const formatted = rounded.toLocaleString('tr-TR');
+
+  switch (currency) {
+    case 'TRY':
+      return `${formatted} ₺`;
+    case 'USD':
+      return `$${formatted}`;
+    case 'EUR':
+      return `€${formatted}`;
+    default:
+      return `${formatted} ${currency}`;
+  }
+};
+
+/**
+ * Normalize intent name
+ */
+export const normalizeIntent = (intent: string): string => {
+  return intent
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_');
+};
+
+/**
+ * Mask PII (Personally Identifiable Information)
+ */
+export const maskPII = (text: string): string => {
+  let masked = text;
+
+  // Mask phone numbers
+  masked = masked.replace(/(\+90|0)?\s?5\d{2}\s?\d{3}\s?\d{2}\s?\d{2}/g, '***');
+
+  // Mask email addresses
+  masked = masked.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '***');
+
+  // Mask TC identity numbers (11 digits)
+  masked = masked.replace(/\b\d{11}\b/g, '***');
+
+  return masked;
+};
+
+/**
+ * Parse appointment date and time from text
+ */
+export const parseAppointmentDateTime = (text: string): { date?: string; time?: string } => {
+  const result: { date?: string; time?: string } = {};
+
+  // Parse time (HH:MM format)
+  const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    const hours = timeMatch[1].padStart(2, '0');
+    const minutes = timeMatch[2].padStart(2, '0');
+    result.time = `${hours}:${minutes}`;
+  }
+
+  // Parse date patterns
+  const dateMatch = text.match(/(\d{1,2})\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s*(\d{4})?/i);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1]);
+    const monthNames = ['ocak', 'şubat', 'mart', 'nisan', 'mayıs', 'haziran', 'temmuz', 'ağustos', 'eylül', 'ekim', 'kasım', 'aralık'];
+    const month = monthNames.indexOf(dateMatch[2].toLowerCase()) + 1;
+    const year = dateMatch[3] ? parseInt(dateMatch[3]) : new Date().getFullYear();
+
+    result.date = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  }
+
+  // Handle "yarın" (tomorrow)
+  if (text.toLowerCase().includes('yarın')) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    result.date = toISODate(tomorrow);
+  }
+
+  return result;
+};
+
+/**
+ * Generate random string
+ */
+export const generateRandomString = (length: number): string => {
+  if (length === 0) return '';
+
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return result;
 };
